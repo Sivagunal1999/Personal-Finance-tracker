@@ -1,88 +1,96 @@
-// --- 1. SET UP APPLICATION TIER LIBRARIES ---
+// --- Application Tier using Express and PostgreSQL (pg) ---
+
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
-const PORT = 3000; // You will access the site at http://localhost:3000/
+// Use the port provided by the hosting environment (Render), or default to 3000 locally
+const PORT = process.env.PORT || 3000; 
 
-// --- 2. MIDDLEWARE (Server Setup) ---
-// This tells Express to serve your HTML, CSS, and client-side JS files.
-app.use(express.static(__dirname)); 
-// This allows the server to read data sent from your HTML form (Presentation Tier).
+// --- 1. DATA TIER (PostgreSQL Setup) ---
+
+// The connection string (DATABASE_URL) will be automatically provided by Render 
+// when we link it to the database we create there.
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false // Required for Render connections
+    }
+});
+
+// Function to ensure the database table exists
+async function initializeDatabase() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                type TEXT NOT NULL, 
+                amount NUMERIC NOT NULL, 
+                purpose TEXT NOT NULL, 
+                category TEXT NOT NULL,
+                date DATE NOT NULL DEFAULT CURRENT_DATE
+            )
+        `);
+        console.log('PostgreSQL: Transactions table verified/created successfully.');
+    } catch (err) {
+        console.error('Error initializing database:', err);
+    }
+}
+
+// Call the function to set up the table
+initializeDatabase();
+
+// --- 2. MIDDLEWARE ---
+
+// Serve static files (index.html, styles.css, logic.js)
+app.use(express.static(path.join(__dirname))); 
+// Allow the server to read form data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// --- 3. DATA TIER (Database Setup) ---
-// Connect to the SQLite database file. It will be created in your folder if it doesn't exist.
-const db = new sqlite3.Database(path.join(__dirname, 'finance_tracker.db'), (err) => {
-    if (err) {
-        console.error('Error connecting to database:', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
+// --- 3. APPLICATION TIER LOGIC (API Endpoints) ---
 
-        // Create the Transactions table if it doesn't exist.
-        db.run(`CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL, 
-            amount REAL NOT NULL, 
-            purpose TEXT NOT NULL, 
-            category TEXT NOT NULL,
-            date TEXT NOT NULL
-        )`);
-    }
-});
-
-
-// --- 4. APPLICATION TIER LOGIC (API Endpoints) ---
-
-// A. Endpoint to handle a new transaction submission
-app.post('/api/transactions', (req, res) => {
-    // Data received from the Presentation Tier (the form)
+// A. Endpoint to handle a new transaction submission (CREATE)
+app.post('/api/transactions', async (req, res) => {
     const { type, amount, purpose, category } = req.body;
-    const date = new Date().toISOString().split('T')[0]; // Format today's date
 
-    // Validate data
     if (!type || !amount || !purpose || !category) {
         return res.status(400).json({ error: 'Missing required fields.' });
     }
 
-    // Insert data into the Data Tier (Database)
-    const sql = `INSERT INTO transactions (type, amount, purpose, category, date) VALUES (?, ?, ?, ?, ?);`
-    db.run(sql, [type, amount, purpose, category, date], function(err) {
-        if (err) {
-            console.error('Database insertion error:', err.message);
-            return res.status(500).json({ error: 'Failed to save transaction.' });
-        }
-        // Send a success response back to the Presentation Tier
-        res.status(201).json({ 
-            message: 'Transaction saved successfully!', 
-            id: this.lastID,
-            date: date,
-            type: type,
-            amount: amount,
-            purpose: purpose,
-            category: category
-        });
-    });
+    try {
+        const result = await pool.query(
+            `INSERT INTO transactions (type, amount, purpose, category) 
+             VALUES ($1, $2, $3, $4) RETURNING *`, 
+            [type, amount, purpose, category]
+        );
+
+        // Return the created record
+        res.status(201).json(result.rows[0]); 
+    } catch (err) {
+        console.error('Database insertion error:', err);
+        res.status(500).json({ error: 'Failed to save transaction.' });
+    }
 });
 
-// B. Endpoint to fetch all transactions
-app.get('/api/transactions', (req, res) => {
-    db.all("SELECT * FROM transactions ORDER BY date DESC, id DESC", [], (err, rows) => {
-        if (err) {
-            console.error('Database fetch error:', err.message);
-            return res.status(500).json({ error: 'Failed to retrieve transactions.' });
-        }
+// B. Endpoint to fetch all transactions (READ)
+app.get('/api/transactions', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM transactions ORDER BY date DESC, id DESC");
+
         // Send the data retrieved from the Data Tier back to the Presentation Tier
-        res.json(rows);
-    });
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Database fetch error:', err);
+        res.status(500).json({ error: 'Failed to retrieve transactions.' });
+    }
 });
 
 
-// --- 5. START THE SERVER ---
+// --- 4. START THE SERVER ---
 app.listen(PORT, () => {
-    console.log(`Application Tier Server running at http://localhost:${PORT}`);
-    console.log('Open your browser and navigate to: http://localhost:3000/');
+    console.log(Application Tier Server running on port ${PORT});
+    console.log(Access the site via the Render URL.);
 });
