@@ -1,16 +1,34 @@
 // --- Client-Side JavaScript (runs in the user's browser) ---
 
+// Check login status and update UI
+async function checkLoginStatus() {
+    try {
+        const response = await fetch('/api/check-session');
+        const result = await response.json();
+
+        if (result.loggedIn) {
+            document.getElementById('login-btn').style.display = 'none';
+            document.getElementById('register-btn').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+        } else {
+            document.getElementById('login-btn').style.display = 'inline-block';
+            document.getElementById('register-btn').style.display = 'inline-block';
+            document.getElementById('logout-btn').style.display = 'none';
+        }
+    } catch (err) {
+        console.error('Session check failed:', err);
+    }
+}
+
 // This function fetches data from the server and updates the table
 async function fetchTransactions() {
     try {
-        // Use relative path for cloud deployment
         const response = await fetch('/api/transactions');
         const transactions = await response.json();
-        
-        const tableBody = document.querySelector('#transaction-table tbody');
-        tableBody.innerHTML = ''; 
 
-        // Map icons to categories
+        const tableBody = document.querySelector('#transaction-table tbody');
+        tableBody.innerHTML = '';
+
         const categorySymbols = {
             food: '🍽️',
             salary: '💰',
@@ -21,25 +39,21 @@ async function fetchTransactions() {
 
         transactions.forEach(tx => {
             const row = tableBody.insertRow();
-            
-            // Set background color for Income/Expense
+
             if (tx.type === 'income') {
-                row.style.backgroundColor = '#e9fbe9'; 
+                row.style.backgroundColor = '#e9fbe9';
             } else if (tx.type === 'expense') {
-                row.style.backgroundColor = '#fbe9e9'; 
+                row.style.backgroundColor = '#fbe9e9';
             }
 
-            row.insertCell().textContent = tx.date.split('T')[0]; // Display only the date
+            row.insertCell().textContent = tx.date.split('T')[0];
             row.insertCell().textContent = tx.type.toUpperCase();
-            
-            // Format amount as currency
+
             const amountCell = row.insertCell();
             amountCell.textContent = `${tx.type === 'expense' ? '-' : ''}₹${parseFloat(tx.amount).toFixed(2)}`;
             amountCell.style.fontWeight = 'bold';
 
             row.insertCell().textContent = tx.purpose;
-            
-            // Add category symbol (The fixed line!)
             row.insertCell().textContent = `${categorySymbols[tx.category] || '❓'} ${tx.category}`;
         });
 
@@ -48,22 +62,19 @@ async function fetchTransactions() {
     }
 }
 
-
-// This handles the form submission when the user clicks "Add Transaction"
+// Handle form submission
 document.getElementById('transaction-form').addEventListener('submit', async (event) => {
-    event.preventDefault(); 
+    event.preventDefault();
 
     const form = event.target;
-    // Gather all form data
     const transactionData = {
         type: form.type.value,
-        amount: parseFloat(form.amount.value), 
+        amount: parseFloat(form.amount.value),
         purpose: form.purpose.value,
         category: form.category.value,
     };
 
     try {
-        // Communicate with the Application Tier (POST /api/transactions)
         const response = await fetch('/api/transactions', {
             method: 'POST',
             headers: {
@@ -76,8 +87,8 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
 
         if (response.ok) {
             alert('Transaction Added: ' + result.purpose);
-            form.reset(); 
-            fetchTransactions(); 
+            form.reset();
+            fetchTransactions();
         } else {
             alert('Failed to add transaction: ' + (result.error || 'Unknown error.'));
         }
@@ -88,5 +99,6 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
     }
 });
 
-// Load transactions when the page loads
+// Load transactions and check login status on page load
 fetchTransactions();
+checkLoginStatus();
