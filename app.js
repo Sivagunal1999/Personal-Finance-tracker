@@ -4,19 +4,21 @@ const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
 
+console.log('App starting...'); // Top-level log to confirm app starts
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- 1. DATA TIER (PostgreSQL Setup) ---
 
-// Log the DATABASE_URL to verify it's being read correctly
+// Log DATABASE_URL to confirm it's being read correctly
 console.log('DATABASE_URL:', process.env.DATABASE_URL);
 
 const poolConfig = {
     connectionString: process.env.DATABASE_URL,
 };
 
-// CRITICAL: Only add the SSL configuration when deploying to Render.
+// Add SSL config for Render deployment
 if (process.env.DATABASE_URL) {
     poolConfig.ssl = {
         rejectUnauthorized: false
@@ -47,18 +49,18 @@ async function initializeDatabase() {
 }
 
 // --- 2. MIDDLEWARE ---
-
-app.use(express.static(path.join(__dirname))); 
+app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // --- 3. APPLICATION TIER LOGIC (API Endpoints) ---
 
+// Serve index.html for root path
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// A. Endpoint to handle a new transaction submission (CREATE)
+// A. Create transaction
 app.post('/api/transactions', async (req, res) => {
     const { type, amount, purpose, category } = req.body;
 
@@ -72,7 +74,6 @@ app.post('/api/transactions', async (req, res) => {
              VALUES ($1, $2, $3, $4) RETURNING *`,
             [type, amount, purpose, category]
         );
-
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Database insertion error:', err.stack);
@@ -80,7 +81,7 @@ app.post('/api/transactions', async (req, res) => {
     }
 });
 
-// B. Endpoint to fetch all transactions (READ)
+// B. Fetch all transactions
 app.get('/api/transactions', async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM transactions ORDER BY date DESC, id DESC");
@@ -94,13 +95,13 @@ app.get('/api/transactions', async (req, res) => {
 // --- 4. START THE SERVER ---
 async function startServer() {
     try {
-        await initializeDatabase(); 
-        app.listen(PORT, '0.0.0.0', () => { 
+        await initializeDatabase();
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`Application Tier Server successfully running on port ${PORT}`);
         });
     } catch (error) {
-        console.error("Server failed to start:", error.message);
-        process.exit(1); 
+        console.error("Server failed to start:", error); // Show full error object
+        // Removed process.exit(1) so logs stay visible
     }
 }
 
