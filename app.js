@@ -5,10 +5,12 @@ const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
-// Render sets the PORT environment variable; fall back to 3000 for local testing
 const PORT = process.env.PORT || 3000;
 
 // --- 1. DATA TIER (PostgreSQL Setup) ---
+
+// Log the DATABASE_URL to verify it's being read correctly
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
 
 const poolConfig = {
     connectionString: process.env.DATABASE_URL,
@@ -39,26 +41,22 @@ async function initializeDatabase() {
         `);
         console.log('PostgreSQL: Transactions table verified/created successfully.');
     } catch (err) {
-        console.error('CRITICAL DATABASE ERROR:', err);
+        console.error('CRITICAL DATABASE ERROR:', err.stack); // Show full error stack
         throw new Error("Database initialization failed.");
     }
 }
 
 // --- 2. MIDDLEWARE ---
 
-// Serving static files (CSS, client-side JS) from the root directory
 app.use(express.static(path.join(__dirname))); 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 // --- 3. APPLICATION TIER LOGIC (API Endpoints) ---
 
-// CRITICAL FIX: Explicitly serve index.html for the root path ('/')
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
-
 
 // A. Endpoint to handle a new transaction submission (CREATE)
 app.post('/api/transactions', async (req, res) => {
@@ -77,7 +75,7 @@ app.post('/api/transactions', async (req, res) => {
 
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error('Database insertion error:', err);
+        console.error('Database insertion error:', err.stack);
         res.status(500).json({ error: 'Failed to save transaction.' });
     }
 });
@@ -88,17 +86,15 @@ app.get('/api/transactions', async (req, res) => {
         const result = await pool.query("SELECT * FROM transactions ORDER BY date DESC, id DESC");
         res.json(result.rows);
     } catch (err) {
-        console.error('Database fetch error:', err);
+        console.error('Database fetch error:', err.stack);
         res.status(500).json({ error: 'Failed to retrieve transactions.' });
     }
 });
-
 
 // --- 4. START THE SERVER ---
 async function startServer() {
     try {
         await initializeDatabase(); 
-        // CRITICAL FIX: Tell the server to listen on the required host '0.0.0.0'
         app.listen(PORT, '0.0.0.0', () => { 
             console.log(`Application Tier Server successfully running on port ${PORT}`);
         });
