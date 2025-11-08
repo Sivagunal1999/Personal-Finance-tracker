@@ -1,12 +1,16 @@
 // --- Client-Side JavaScript (runs in the user's browser) ---
+
+// This function fetches data from the server and updates the table
 async function fetchTransactions() {
     try {
-        const response = await fetch('http://localhost:3000/api/transactions');
+        // Use relative path for cloud deployment
+        const response = await fetch('/api/transactions');
         const transactions = await response.json();
-
+        
         const tableBody = document.querySelector('#transaction-table tbody');
         tableBody.innerHTML = ''; 
 
+        // Map icons to categories
         const categorySymbols = {
             food: '🍽️',
             salary: '💰',
@@ -17,22 +21,25 @@ async function fetchTransactions() {
 
         transactions.forEach(tx => {
             const row = tableBody.insertRow();
-
+            
+            // Set background color for Income/Expense
             if (tx.type === 'income') {
                 row.style.backgroundColor = '#e9fbe9'; 
             } else if (tx.type === 'expense') {
                 row.style.backgroundColor = '#fbe9e9'; 
             }
 
-            row.insertCell().textContent = tx.date;
+            row.insertCell().textContent = tx.date.split('T')[0]; // Display only the date
             row.insertCell().textContent = tx.type.toUpperCase();
-
-            // * This is the section you showed me! *
+            
+            // Format amount as currency
             const amountCell = row.insertCell();
-            amountCell.textContent = `${tx.type === 'expense' ? '-' : ''}₹${tx.amount.toFixed(2)}`;
+            amountCell.textContent = `${tx.type === 'expense' ? '-' : ''}₹${parseFloat(tx.amount).toFixed(2)}`;
             amountCell.style.fontWeight = 'bold';
 
             row.insertCell().textContent = tx.purpose;
+            
+            // Add category symbol (The fixed line!)
             row.insertCell().textContent = `${categorySymbols[tx.category] || '❓'} ${tx.category}`;
         });
 
@@ -41,19 +48,23 @@ async function fetchTransactions() {
     }
 }
 
+
+// This handles the form submission when the user clicks "Add Transaction"
 document.getElementById('transaction-form').addEventListener('submit', async (event) => {
     event.preventDefault(); 
 
     const form = event.target;
+    // Gather all form data
     const transactionData = {
         type: form.type.value,
-        amount: parseFloat(form.amount.value),
+        amount: parseFloat(form.amount.value), 
         purpose: form.purpose.value,
         category: form.category.value,
     };
 
     try {
-        const response = await fetch('http://localhost:3000/api/transactions', {
+        // Communicate with the Application Tier (POST /api/transactions)
+        const response = await fetch('/api/transactions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -73,8 +84,9 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
 
     } catch (error) {
         console.error('Submission error:', error);
-        alert('Failed to connect to the server. Is the server running?');
+        alert('Failed to connect to the server.');
     }
 });
 
+// Load transactions when the page loads
 fetchTransactions();
