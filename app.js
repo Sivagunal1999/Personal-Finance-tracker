@@ -5,6 +5,7 @@ const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
+// Render sets the PORT environment variable; fall back to 3000 for local testing
 const PORT = process.env.PORT || 3000;
 
 // --- 1. DATA TIER (PostgreSQL Setup) ---
@@ -14,6 +15,7 @@ const poolConfig = {
 };
 
 // CRITICAL: Only add the SSL configuration when deploying to a secure cloud host like Render.
+// This is necessary because we added the NODE_TLS_REJECT_UNAUTHORIZED=0 variable on Render.
 if (process.env.DATABASE_URL) {
     poolConfig.ssl = {
         rejectUnauthorized: false
@@ -45,7 +47,7 @@ async function initializeDatabase() {
 
 // --- 2. MIDDLEWARE ---
 
-// Serving static files from the root directory
+// Serving static files from the root directory (index.html, styles.css, logic.js)
 app.use(express.static(path.join(__dirname))); 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -87,11 +89,12 @@ app.get('/api/transactions', async (req, res) => {
 });
 
 
-// --- 4. START THE SERVER ---
+// --- 4. START THE SERVER (The FINAL FIX) ---
 async function startServer() {
     try {
         await initializeDatabase(); 
-        app.listen(PORT, () => {
+        // CRITICAL FIX: Tell the server to listen on the required host '0.0.0.0'
+        app.listen(PORT, '0.0.0.0', () => { 
             console.log(`Application Tier Server successfully running on port ${PORT}`);
         });
     } catch (error) {
