@@ -1,19 +1,22 @@
 {
-  "name": "app",
+  "name": "personal-finance-tracker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A three-tier application for tracking personal finances deployed on Render.",
+  "main": "app.js",
   "scripts": {
-  "start": "npm install && node app.js", 
+    "start": "node app.js",  <-- SIMPLIFIED AND CORRECTED
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "node",
+    "express",
+    "postgresql"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "express": "^5.1.0",
-    "sqlite3": "^5.1.7",
-    "pg": "^8.11.3"
+    "express": "^4.18.2",  <-- REVERTED TO STABLE V4
+    "pg": "^8.11.3"       <-- ONLY POSTGRES REMAINS
   }
 }
