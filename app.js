@@ -14,8 +14,7 @@ const poolConfig = {
     connectionString: process.env.DATABASE_URL,
 };
 
-// CRITICAL: Only add the SSL configuration when deploying to a secure cloud host like Render.
-// This is necessary because we added the NODE_TLS_REJECT_UNAUTHORIZED=0 variable on Render.
+// CRITICAL: Only add the SSL configuration when deploying to Render.
 if (process.env.DATABASE_URL) {
     poolConfig.ssl = {
         rejectUnauthorized: false
@@ -47,13 +46,19 @@ async function initializeDatabase() {
 
 // --- 2. MIDDLEWARE ---
 
-// Serving static files from the root directory (index.html, styles.css, logic.js)
+// Serving static files (CSS, client-side JS) from the root directory
 app.use(express.static(path.join(__dirname))); 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
 // --- 3. APPLICATION TIER LOGIC (API Endpoints) ---
+
+// CRITICAL FIX: Explicitly serve index.html for the root path ('/')
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 
 // A. Endpoint to handle a new transaction submission (CREATE)
 app.post('/api/transactions', async (req, res) => {
@@ -89,7 +94,7 @@ app.get('/api/transactions', async (req, res) => {
 });
 
 
-// --- 4. START THE SERVER (The FINAL FIX) ---
+// --- 4. START THE SERVER ---
 async function startServer() {
     try {
         await initializeDatabase(); 
