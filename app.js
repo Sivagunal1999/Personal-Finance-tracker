@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 // --- 1. DATA TIER (PostgreSQL Setup) ---
 const poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Required for Render
+    ssl: { rejectUnauthorized: false }
 };
 
 const pool = new Pool(poolConfig);
@@ -58,7 +58,8 @@ app.use(session({
 // --- 3. AUTHENTICATION HELPERS ---
 function requireLogin(req, res, next) {
     if (!req.session.user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        // Redirect to login page if unauthorized
+        return res.redirect('/login'); 
     }
     next();
 }
@@ -77,12 +78,21 @@ app.get('/health', async (req, res) => {
 
 // Serve homepage
 app.get('/', (req, res) => {
+    // If not logged in, redirect to login page
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+// Serve register page <-- FIX: THIS ROUTE WAS MISSING
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'register.html'));
 });
 
 // Register new user
