@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const validator = require('validator'); // For email/mobile validation
+const validator = require('validator');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +18,7 @@ const poolConfig = {
 
 const pool = new Pool(poolConfig);
 
-// Function to ensure the database tables exist (Includes user_id for transactions)
+// Function to ensure the database tables exist
 async function initializeDatabase() {
     try {
         // FIX: Corrected SQL syntax by removing duplicate 'PRIMARY'
@@ -91,7 +91,7 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-// Admin endpoint to view users (showing secure hash instead of plain password)
+// Admin endpoint to view users (showing secure hash)
 app.get('/api/admin/registered-users', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
@@ -99,7 +99,7 @@ app.get('/api/admin/registered-users', async (req, res) => {
         const users = result.rows.map(user => ({
             id: user.id,
             username: user.username,
-            password_hash: user.password
+            password_hash: user.password // Secure hash
         }));
 
         res.json({ 
@@ -123,13 +123,19 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Serve login/register pages
+// Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
+// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
+});
+
+// Serve forgot password page <-- NEW ROUTE
+app.get('/forgot-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'forgot-password.html'));
 });
 
 // Register new user
