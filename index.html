@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Finance Tracker</title>
+    <!-- ✅ Proper CSS link -->
     styles.css
 </head>
 <body>
@@ -11,8 +12,7 @@
     <header>
         <h1>💵 My Money Manager</h1>
         <div id="auth-buttons" style="margin-top: 10px;">
-            /loginLogin</a> |
-            /registerRegister</a>
+            <a href="/login" id="login-btn/registerRegister</a>
             <button id="logout-btn" onclick="logout()" style="display: none;">Logout</button>
         </div>
     </header>
@@ -22,7 +22,8 @@
             <h2>Add New Transaction</h2>
             <form id="transaction-form">
                 <label for="type">Type:</label>
-                value="income">Income (+)</option>
+                <select id="type" name="type" required>
+                    <option value="income">Income (+)</option>
                     <option value="expense">Expense (-)</option>
                     <option value="transfer">Transfer (T)</option>
                 </select>
@@ -62,6 +63,7 @@
         </section>
     </main>
 
+    <!-- ✅ Proper JS link -->
     logic.js</script>
     <script>
         async function logout() {
