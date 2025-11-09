@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Finance Tracker</title>
-    <!-- ✅ Proper CSS link -->
-    styles.css
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
     <header>
         <h1>💵 My Money Manager</h1>
         <div id="auth-buttons" style="margin-top: 10px;">
-            <a href="/login" id="login-btn/registerRegister</a>
+            <a href="/login" id="login-btn">Login</a> / <a href="/register" id="register-btn">Register</a>
             <button id="logout-btn" onclick="logout()" style="display: none;">Logout</button>
         </div>
     </header>
@@ -21,13 +20,14 @@
         <section class="transaction-form-section">
             <h2>Add New Transaction</h2>
             <form id="transaction-form">
+                
                 <label for="type">Type:</label>
                 <select id="type" name="type" required>
                     <option value="income">Income (+)</option>
                     <option value="expense">Expense (-)</option>
                     <option value="transfer">Transfer (T)</option>
                 </select>
-
+                
                 <label for="amount">Amount:</label>
                 <input type="number" id="amount" name="amount" step="0.01" required>
 
@@ -63,9 +63,9 @@
         </section>
     </main>
 
-    <!-- ✅ Proper JS link -->
-    logic.js</script>
+    <script src="logic.js"></script>
     <script>
+        // Logout function placed outside logic.js for simple access
         async function logout() {
             const response = await fetch('/api/logout', { method: 'POST' });
             if (response.ok) {
