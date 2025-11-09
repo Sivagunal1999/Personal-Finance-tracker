@@ -36,18 +36,33 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            const result = await response.json();
-            if (response.ok) {
-                // SUCCESS: Redirect straight to homepage
-                window.location.href = '/'; 
-            } else {
-                alert('Login failed: ' + (result.error || 'Invalid credentials'));
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                // CRITICAL FIX: Check response status first
+                if (response.ok) {
+                    // Successful login
+                    window.location.href = '/'; 
+                } else {
+                    // Check if the response contains JSON (for explicit errors like 401)
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const result = await response.json();
+                        alert('Login failed: ' + (result.error || 'Invalid credentials'));
+                    } else {
+                        // Response was not OK and was not JSON (i.e., it was HTML)
+                        alert("Login failed due to unexpected server response. Please ensure your credentials are correct.");
+                        console.error("Server returned non-JSON content. Response Status:", response.status);
+                    }
+                }
+            } catch(error) {
+                // Network error or connection failed
+                alert("Login failed: Cannot connect to the server.");
+                console.error("Fetch error:", error);
             }
         });
     </script>
