@@ -1,5 +1,3 @@
-// --- Client-Side JavaScript (runs in the user's browser) ---
-
 // Check login status and update UI
 async function checkLoginStatus() {
     try {
@@ -20,7 +18,7 @@ async function checkLoginStatus() {
     }
 }
 
-// This function fetches data from the server and updates the table
+// Fetch transactions
 async function fetchTransactions() {
     try {
         const response = await fetch('/api/transactions');
