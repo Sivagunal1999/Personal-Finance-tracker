@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Personal Finance Tracker</title>
     styles.css
 </head>
@@ -30,7 +31,11 @@
             const response = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                if (response.ok) {
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
                 alert('Login successful!');
                 window.location.href = '/';
             } else {
@@ -39,4 +44,3 @@
         });
     </script>
 </body>
-</html>
