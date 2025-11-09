@@ -23,6 +23,7 @@ async function initializeDatabase() {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,  -- CRITICAL: Added User ID column
                 type TEXT NOT NULL,
                 amount NUMERIC NOT NULL,
                 purpose TEXT NOT NULL,
@@ -50,7 +51,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: 'your-secret-key', // Replace with a secure key
+    secret: 'your-secret-key',
     resave: false,
     saveUninitialized: false,
 }));
@@ -58,8 +59,8 @@ app.use(session({
 // --- 3. AUTHENTICATION HELPERS ---
 function requireLogin(req, res, next) {
     if (!req.session.user) {
-        // Redirect to login page if unauthorized
-        return res.redirect('/login'); 
+        // Return 401 for API calls, client-side JS will redirect
+        return res.status(401).json({ error: 'Unauthorized' }); 
     }
     next();
 }
@@ -74,11 +75,21 @@ app.get('/health', async (req, res) => {
     }
 });
 
+// Endpoint to check login status
+app.get('/api/check-session', (req, res) => {
+    if (req.session.user) {
+        res.json({ loggedIn: true, username: req.session.user.username });
+    } else {
+        res.json({ loggedIn: false });
+    }
+});
+
+
 // --- 5. ROUTES ---
 
 // Serve homepage
 app.get('/', (req, res) => {
-    // If not logged in, redirect to login page
+    // If user is not logged in, redirect them immediately to the login page
     if (!req.session.user) {
         return res.redirect('/login');
     }
@@ -90,7 +101,7 @@ app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-// Serve register page <-- FIX: THIS ROUTE WAS MISSING
+// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
@@ -115,7 +126,8 @@ app.post('/api/login', async (req, res) => {
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
         if (user && await bcrypt.compare(password, user.password)) {
-            req.session.user = { id: user.id, username: user.username };
+            // Store user ID in session
+            req.session.user = { id: user.id, username: user.username }; 
             res.json({ message: 'Login successful' });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });
@@ -135,14 +147,17 @@ app.post('/api/logout', (req, res) => {
 // Create transaction (protected)
 app.post('/api/transactions', requireLogin, async (req, res) => {
     const { type, amount, purpose, category } = req.body;
+    const userId = req.session.user.id; // Get user ID from session
+    
     if (!type || !amount || !purpose || !category) {
         return res.status(400).json({ error: 'Missing required fields.' });
     }
     try {
+        // INCLUDES user_id in the insert statement
         const result = await pool.query(
-            `INSERT INTO transactions (type, amount, purpose, category)
-             VALUES ($1, $2, $3, $4) RETURNING *`,
-            [type, amount, purpose, category]
+            `INSERT INTO transactions (user_id, type, amount, purpose, category)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [userId, type, amount, purpose, category] // Pass user ID as first parameter
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -153,8 +168,11 @@ app.post('/api/transactions', requireLogin, async (req, res) => {
 
 // Fetch all transactions (protected)
 app.get('/api/transactions', requireLogin, async (req, res) => {
+    const userId = req.session.user.id; // Get user ID from session
+    
     try {
-        const result = await pool.query("SELECT * FROM transactions ORDER BY date DESC, id DESC");
+        // CRITICAL FIX: Filters transactions by user_id
+        const result = await pool.query("SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC, id DESC", [userId]);
         res.json(result.rows);
     } catch (err) {
         console.error('Database fetch error:', err.stack);
