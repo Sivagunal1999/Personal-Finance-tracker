@@ -1,25 +1,41 @@
+// --- Client-Side JavaScript ---
+
 // Check login status and update UI
 async function checkLoginStatus() {
     try {
+        // NOTE: This assumes an endpoint exists in app.js at /api/check-session
         const response = await fetch('/api/check-session');
         const result = await response.json();
 
+        const loginBtn = document.getElementById('login-btn');
+        const registerBtn = document.getElementById('register-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const welcomeMsg = document.getElementById('welcome-message');
+
         if (result.loggedIn) {
-            document.getElementById('login-btn').style.display = 'none';
-            document.getElementById('register-btn').style.display = 'none';
-            document.getElementById('logout-btn').style.display = 'inline-block';
+            // Logged In: Show logout button and welcome message
+            if (loginBtn) loginBtn.style.display = 'none';
+            if (registerBtn) registerBtn.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = 'inline-block';
+            if (welcomeMsg) {
+                welcomeMsg.textContent = `Welcome, ${result.username}!`;
+                welcomeMsg.style.display = 'inline';
+            }
+            fetchTransactions(); // Fetch data only if logged in
         } else {
-            document.getElementById('login-btn').style.display = 'inline-block';
-            document.getElementById('register-btn').style.display = 'inline-block';
-            document.getElementById('logout-btn').style.display = 'none';
+            // Not Logged In: Redirect to login page
+            window.location.href = '/login';
         }
     } catch (err) {
         console.error('Session check failed:', err);
+        // If the check fails (e.g., server error), also redirect to login
+        window.location.href = '/login';
     }
 }
 
 // Fetch transactions
 async function fetchTransactions() {
+    // This function only runs if checkLoginStatus determines the user is logged in
     try {
         const response = await fetch('/api/transactions');
         const transactions = await response.json();
@@ -28,11 +44,7 @@ async function fetchTransactions() {
         tableBody.innerHTML = '';
 
         const categorySymbols = {
-            food: '🍽️',
-            salary: '💰',
-            rent: '🏠',
-            fun: '🎉',
-            transfer: '↔️',
+            food: '🍽️', salary: '💰', rent: '🏠', fun: '🎉', transfer: '↔️',
         };
 
         transactions.forEach(tx => {
@@ -75,14 +87,11 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
     try {
         const response = await fetch('/api/transactions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(transactionData),
         });
 
         const result = await response.json();
-
         if (response.ok) {
             alert('Transaction Added: ' + result.purpose);
             form.reset();
@@ -90,13 +99,12 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
         } else {
             alert('Failed to add transaction: ' + (result.error || 'Unknown error.'));
         }
-
     } catch (error) {
         console.error('Submission error:', error);
         alert('Failed to connect to the server.');
     }
 });
 
-// Load transactions and check login status on page load
-fetchTransactions();
+// Initial function calls
+// NOTE: fetchTransactions is now called inside checkLoginStatus
 checkLoginStatus();
