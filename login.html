@@ -44,8 +44,8 @@
 
             const result = await response.json();
             if (response.ok) {
-                alert('Login successful!');
-                window.location.href = '/';
+                // SUCCESS: Redirect straight to homepage
+                window.location.href = '/'; 
             } else {
                 alert('Login failed: ' + (result.error || 'Invalid credentials'));
             }
