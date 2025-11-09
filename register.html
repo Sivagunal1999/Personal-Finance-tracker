@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - Personal Finance Tracker</title>
-    styles.css
-</head>
-<body>
+    <link rel="stylesheet"dy>
     <main>
         <section class="transaction-form-section">
             <h2>Create Account</h2>
@@ -30,7 +29,10 @@
             const response = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: = await response.json();
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
             if (response.ok) {
                 alert('Registration successful! Please login.');
                 window.location.href = '/login';
