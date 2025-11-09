@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Code</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main>
+        <section class="transaction-form-section">
+            <h2>Verify Reset Code</h2>
+            <p style="text-align: center; margin-bottom: 20px;">
+                A verification code has been sent to your device.
+            </p>
+            <form id="verify-otp-form">
+                <label for="otp-code">Enter 6-Digit Code:</label>
+                <input type="text" id="otp-code" name="otp-code" required maxlength="6">
+
+                <button type="submit">Verify & Proceed</button>
+            </form>
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="/forgot-password">Resend Code</a>
+            </p>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('verify-otp-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const otpCode = document.getElementById('otp-code').value;
+            
+            // NOTE: The actual logic to verify the OTP will go here later.
+            alert(`Verifying code ${otpCode}. If successful, redirect to reset-password page.`);
+            window.location.href = '/reset-password'; 
+        });
+    </script>
+</body>
+</html>
