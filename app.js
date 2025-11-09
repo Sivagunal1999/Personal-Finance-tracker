@@ -21,7 +21,6 @@ const pool = new Pool(poolConfig);
 // Function to ensure the database tables exist
 async function initializeDatabase() {
     try {
-        // FIX: Corrected SQL syntax by removing duplicate 'PRIMARY'
         await pool.query(`
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY, 
@@ -91,7 +90,7 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-// Admin endpoint to view users (showing secure hash)
+// Admin endpoint to view users
 app.get('/api/admin/registered-users', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
@@ -99,7 +98,7 @@ app.get('/api/admin/registered-users', async (req, res) => {
         const users = result.rows.map(user => ({
             id: user.id,
             username: user.username,
-            password_hash: user.password // Secure hash
+            password_hash: user.password
         }));
 
         res.json({ 
@@ -133,10 +132,21 @@ app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
-// Serve forgot password page <-- NEW ROUTE
+// Serve forgot password page
 app.get('/forgot-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'forgot-password.html'));
 });
+
+// Serve OTP verification page <-- FIX: NEW ROUTE
+app.get('/verify-otp', (req, res) => {
+    res.sendFile(path.join(__dirname, 'verify-otp.html'));
+});
+
+// Serve final password reset page <-- FIX: NEW ROUTE
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'reset-password.html'));
+});
+
 
 // Register new user
 app.post('/api/register', async (req, res) => {
