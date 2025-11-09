@@ -17,7 +17,7 @@ const poolConfig = {
 
 const pool = new Pool(poolConfig);
 
-// Function to ensure the database tables exist
+// Function to ensure the database tables exist (Includes user_id for transactions)
 async function initializeDatabase() {
     try {
         await pool.query(`
@@ -39,6 +39,7 @@ async function initializeDatabase() {
                 password TEXT NOT NULL
             )
         `);
+        console.log('PostgreSQL: Tables verified/created.');
     } catch (err) {
         console.error('Database initialization error:', err.stack);
         throw new Error("Database initialization failed.");
@@ -64,17 +65,19 @@ function requireLogin(req, res, next) {
     next();
 }
 
-// --- 4. HEALTH CHECK ENDPOINT ---
+// --- 4. ENDPOINTS & LOGIC ---
+
+// Health Check
 app.get('/health', async (req, res) => {
     try {
-        const result = await pool.query('SELECT NOW()');
-        res.status(200).json({ status: 'OK', dbTime: result.rows[0].now });
+        await pool.query('SELECT NOW()');
+        res.status(200).json({ status: 'OK' });
     } catch (err) {
         res.status(500).json({ status: 'ERROR', message: 'Database unreachable' });
     }
 });
 
-// Endpoint to check login status
+// Check Session
 app.get('/api/check-session', (req, res) => {
     if (req.session.user) {
         res.json({ loggedIn: true, username: req.session.user.username });
@@ -83,18 +86,29 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-// Admin endpoint to check user count <-- NEW ENDPOINT ADDED HERE
-app.get('/api/admin/user-count', async (req, res) => {
+// Admin endpoint to view users (showing secure hash instead of plain password)
+app.get('/api/admin/registered-users', async (req, res) => {
     try {
-        const result = await pool.query('SELECT COUNT(*) FROM users');
+        // Query to fetch ID, username, and the secure password hash
+        const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
+        
+        // Rename 'password' to 'password_hash' in the output for clarity
+        const users = result.rows.map(user => ({
+            id: user.id,
+            username: user.username,
+            password_hash: user.password // This is the encrypted value
+        }));
+
         res.json({ 
-            total_users: result.rows[0].count 
+            total_users: result.rows.length,
+            users: users 
         });
     } catch (err) {
-        console.error('User count error:', err);
-        res.status(500).json({ error: 'Failed to fetch user count.' });
+        console.error('User fetch error:', err);
+        res.status(500).json({ error: 'Failed to fetch registered users.' });
     }
 });
+
 
 // --- 5. ROUTES ---
 
@@ -106,12 +120,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Serve login page
+// Serve login/register pages
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
@@ -153,7 +166,7 @@ app.post('/api/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// Create transaction (protected)
+// Create transaction (protected - Filters by user ID)
 app.post('/api/transactions', requireLogin, async (req, res) => {
     const { type, amount, purpose, category } = req.body;
     const userId = req.session.user.id;
@@ -162,6 +175,7 @@ app.post('/api/transactions', requireLogin, async (req, res) => {
         return res.status(400).json({ error: 'Missing required fields.' });
     }
     try {
+        // Includes user_id in the insert statement
         const result = await pool.query(
             `INSERT INTO transactions (user_id, type, amount, purpose, category)
              VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -174,11 +188,12 @@ app.post('/api/transactions', requireLogin, async (req, res) => {
     }
 });
 
-// Fetch all transactions (protected)
+// Fetch all transactions (protected - Filters by user ID)
 app.get('/api/transactions', requireLogin, async (req, res) => {
     const userId = req.session.user.id;
     
     try {
+        // Filters transactions by user_id
         const result = await pool.query("SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC, id DESC", [userId]);
         res.json(result.rows);
     } catch (err) {
