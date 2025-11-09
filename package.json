@@ -20,6 +20,6 @@
     "pg": "^8.11.3",
     "bcrypt": "^5.1.0",
     "express-session": "^1.17.3",
-    "validator": "^13.11.0"  <-- NEW DEPENDENCY
+    "validator": "^13.11.0"
   }
 }
