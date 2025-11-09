@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - Personal Finance Tracker</title>
-    <link rel="stylesheet"dy>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
     <main>
         <section class="transaction-form-section">
             <h2>Create Account</h2>
@@ -17,6 +19,9 @@
 
                 <button type="submit">Register</button>
             </form>
+            <p style="text-align: center; margin-top: 15px;">
+                Already have an account? <a href="/login">Login here</a>
+            </p>
         </section>
     </main>
 
@@ -37,7 +42,7 @@
                 alert('Registration successful! Please login.');
                 window.location.href = '/login';
             } else {
-                alert('Registration failed: ' + result.error);
+                alert('Registration failed: ' + (result.error || 'Username may be taken.'));
             }
         });
     </script>
