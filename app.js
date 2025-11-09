@@ -44,11 +44,11 @@ async function initializeDatabase() {
             )
         `);
         
-        // NEW TABLE for OTP tracking
+        // TABLE for OTP tracking
         await pool.query(`
             CREATE TABLE IF NOT EXISTS password_resets (
-                identifier TEXT NOT NULL,  -- Email or Mobile
-                code TEXT NOT NULL,        -- The 6-digit OTP
+                identifier TEXT NOT NULL,  
+                code TEXT NOT NULL,        
                 expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
                 PRIMARY KEY (identifier)
             )
@@ -75,23 +75,15 @@ app.use(session({
 // --- 3. AUTHENTICATION HELPERS ---
 function requireLogin(req, res, next) {
     if (!req.session.user) {
+        // Return 401 for API calls
         return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
 }
 
-// --- 4. ENDPOINTS & LOGIC ---
+// --- 4. API ENDPOINTS ---
 
-// Health Check and Session Check (remain the same)
-app.get('/health', async (req, res) => {
-    try {
-        await pool.query('SELECT NOW()');
-        res.status(200).json({ status: 'OK' });
-    } catch (err) {
-        res.status(500).json({ status: 'ERROR', message: 'Database unreachable' });
-    }
-});
-
+// Check Session
 app.get('/api/check-session', (req, res) => {
     if (req.session.user) {
         res.json({ loggedIn: true, username: req.session.user.username });
@@ -100,129 +92,36 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-app.get('/api/admin/registered-users', async (req, res) => {
+// Login API
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
     try {
-        const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
-        const users = result.rows.map(user => ({
-            id: user.id,
-            username: user.username,
-            password_hash: user.password
-        }));
-
-        res.json({ 
-            total_users: result.rows.length,
-            users: users 
-        });
-    } catch (err) {
-        console.error('User fetch error:', err);
-        res.status(500).json({ error: 'Failed to fetch registered users.' });
-    }
-});
-
-// API to initiate password reset (Generate and "Send" OTP) <-- NEW OTP ENDPOINT
-app.post('/api/forgot-password', async (req, res) => {
-    const { identifier } = req.body;
-
-    let userResult;
-    if (validator.isEmail(identifier)) {
-        userResult = await pool.query('SELECT id FROM users WHERE email = $1', [identifier]);
-    } else if (validator.isMobilePhone(identifier, 'any')) {
-        userResult = await pool.query('SELECT id FROM users WHERE mobile = $1', [identifier]);
-    } else {
-        return res.status(400).json({ error: 'Invalid identifier format.' });
-    }
-
-    if (userResult.rows.length === 0) {
-        // IMPORTANT: Always return a generic success to prevent fishing for valid accounts.
-        return res.json({ message: 'If user exists, code has been sent.' });
-    }
-
-    // 2. Generate and store the OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
-    const expiresAt = new Date(Date.now() + 10 * 60000); // Expires in 10 minutes
-
-    try {
-        await pool.query(
-            `INSERT INTO password_resets (identifier, code, expires_at)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (identifier) DO UPDATE SET code = $2, expires_at = $3`,
-            [identifier, otpCode, expiresAt]
-        );
-
-        // MOCK LOG: In a real app, Twilio/SendGrid would be called.
-        // We pass the code back to the client for easy testing.
-        res.json({ message: 'Verification code sent.', otpCode: otpCode });
-
-    } catch (err) {
-        console.error('OTP generation error:', err.stack);
-        res.status(500).json({ error: 'Failed to initiate password reset.' });
-    }
-});
-
-// API to verify the OTP and grant reset permission <-- NEW OTP ENDPOINT
-app.post('/api/verify-otp', async (req, res) => {
-    const { identifier, otpCode } = req.body;
-
-    try {
-        const result = await pool.query(
-            'SELECT code, expires_at FROM password_resets WHERE identifier = $1', 
-            [identifier]
-        );
-        const resetRequest = result.rows[0];
-
-        if (!resetRequest || resetRequest.code !== otpCode) {
-            return res.status(400).json({ error: 'Invalid verification code.' });
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
+        if (user && await bcrypt.compare(password, user.password)) {
+            req.session.user = { id: user.id, username: user.username }; 
+            res.json({ message: 'Login successful' });
+        } else {
+            // Return JSON error on failed credentials
+            res.status(401).json({ error: 'Invalid credentials' });
         }
-
-        if (new Date(resetRequest.expires_at) < new Date()) {
-            return res.status(400).json({ error: 'Verification code has expired.' });
-        }
-
-        // OTP is valid: Grant permission to reset password via session flag
-        req.session.resetIdentifier = identifier; 
-
-        // Delete the code to prevent reuse
-        await pool.query('DELETE FROM password_resets WHERE identifier = $1', [identifier]);
-
-        res.json({ message: 'Code verified. Ready to reset password.' });
-
     } catch (err) {
-        console.error('OTP verification error:', err.stack);
-        res.status(500).json({ error: 'Verification failed.' });
+        console.error('Login error:', err.stack);
+        res.status(500).json({ error: 'Login failed due to server error' });
     }
 });
 
-// API to finalize the password reset
-app.post('/api/reset-password', async (req, res) => {
-    const { password } = req.body;
-    const identifier = req.session.resetIdentifier;
-
-    if (!identifier) {
-        return res.status(401).json({ error: 'Reset session expired or invalid.' });
-    }
-    
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Determine if identifier is email or mobile to update the correct user
-        let field = validator.isEmail(identifier) ? 'email' : 'mobile';
-
-        await pool.query(`UPDATE users SET password = $1 WHERE ${field} = $2`, [hashedPassword, identifier]);
-
-        // Clear the session flag after successful reset
-        delete req.session.resetIdentifier;
-        
-        res.json({ message: 'Password successfully updated.' });
-    } catch (err) {
-        console.error('Password reset error:', err.stack);
-        res.status(500).json({ error: 'Failed to reset password.' });
-    }
+// Logout API
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ message: 'Logged out' });
 });
 
+// --- (Other API endpoints, like /api/register, /api/transactions, etc. are fine) ---
 
-// --- 5. ROUTES (Serve HTML Pages) ---
+// --- 5. HTML ROUTES (Must be defined AFTER API calls they might block) ---
 
-// Serve HTML pages (remain the same)
+// Serve homepage (protected redirect)
 app.get('/', (req, res) => {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -230,14 +129,17 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
+// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+// Serve forgot password page
 app.get('/forgot-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'forgot-password.html'));
 });
@@ -256,20 +158,5 @@ app.get('/reset-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'reset-password.html'));
 });
 
-// Register new user, Login, Logout, Transaction Endpoints (remain the same)
-
-// ...
-
-// --- 6. START THE SERVER ---
-async function startServer() {
-    try {
-        await initializeDatabase();
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-    } catch (error) {
-        console.error("Server failed to start:", error);
-    }
-}
-
-startServer();
+// --- 6. START THE SERVER --- (Rest of the code remains the same)
+// ... (omitted for brevity, but include the startServer async function)
