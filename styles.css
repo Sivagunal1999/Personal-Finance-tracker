@@ -15,6 +15,26 @@ header {
     padding: 20px 0;
     text-align: center;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Flexbox for header to arrange title and auth buttons */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 40px;
+}
+
+header h1 {
+    margin: 0;
+}
+
+/* Ensure header links/buttons are visible */
+header a, header button {
+    color: white;
+    text-decoration: none;
+    background: none;
+    border: 1px solid white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 main {
@@ -31,7 +51,7 @@ h2 {
 }
 
 
-/* --- 2. Form Styling (The Presentation Tier Inputs) --- */
+/* --- 2. Shared Form Section Styling --- */
 
 .transaction-form-section {
     background-color: white;
@@ -41,17 +61,7 @@ h2 {
     margin-bottom: 30px;
 }
 
-#transaction-form {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Two columns for a clean layout */
-    gap: 15px; /* Space between elements */
-}
-
-/* Make the submit button span across both columns */
-#transaction-form button[type="submit"] {
-    grid-column: 1 / span 2;
-}
-
+/* Base styles for all inputs and buttons */
 label {
     font-weight: bold;
     display: block;
@@ -60,12 +70,14 @@ label {
 
 input[type="number"],
 input[type="text"],
+input[type="password"],
 select {
     width: 100%;
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    box-sizing: border-box; /* Important: makes padding inside the width */
+    box-sizing: border-box; 
+    margin-bottom: 15px; /* Added margin to stack inputs */
 }
 
 button[type="submit"] {
@@ -84,7 +96,54 @@ button[type="submit"]:hover {
 }
 
 
-/* --- 3. Table/List Styling --- */
+/* --- 3. Transaction Form (Two Column Layout) --- */
+
+#transaction-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr; 
+    gap: 15px; 
+}
+
+/* Make the submit button span across both columns */
+#transaction-form button[type="submit"] {
+    grid-column: 1 / span 2;
+}
+
+/* --- 4. Login/Register Form (Single Column, Centered) --- */
+
+#login-form,
+#register-form {
+    display: flex; 
+    flex-direction: column; 
+    gap: 0; /* Gap is managed by input margins now */
+    max-width: 350px; /* Make the form narrow and focused */
+    margin: 0 auto; /* Center the form horizontally */
+}
+
+/* Center the section on the login/register pages for a clean look */
+body > main:has(#login-form),
+body > main:has(#register-form) {
+    display: flex;
+    justify-content: center; 
+    align-items: flex-start; /* Align to the top, not center screen */
+    min-height: 80vh; 
+    padding-top: 50px; 
+}
+
+/* Style the login/register button distinctly */
+#login-form button[type="submit"],
+#register-form button[type="submit"] {
+    background-color: #3498db; /* Blue button for Auth */
+    margin-top: 10px;
+}
+
+#login-form button[type="submit"]:hover,
+#register-form button[type="submit"]:hover {
+    background-color: #2980b9;
+}
+
+
+/* --- 5. Table/List Styling --- */
 
 .transaction-list-section {
     background-color: white;
@@ -95,18 +154,18 @@ button[type="submit"]:hover {
 
 #transaction-table {
     width: 100%;
-    border-collapse: collapse; /* Removes double borders */
+    border-collapse: collapse; 
 }
 
 #transaction-table th,
 #transaction-table td {
     padding: 12px;
     text-align: left;
-    border-bottom: 1px solid #ecf0f1; /* Light separator line */
+    border-bottom: 1px solid #ecf0f1; 
 }
 
 #transaction-table th {
-    background-color: #eaf1f7; /* Light background for headers */
+    background-color: #eaf1f7; 
     color: #34495e;
     font-weight: bold;
 }
