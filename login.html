@@ -48,15 +48,16 @@
                     // Successful login
                     window.location.href = '/'; 
                 } else {
-                    // Check if the response contains JSON (for explicit errors like 401)
+                    // Response was not OK (401, 500, etc.). Attempt to read JSON error.
                     const contentType = response.headers.get("content-type");
+                    
                     if (contentType && contentType.includes("application/json")) {
                         const result = await response.json();
                         alert('Login failed: ' + (result.error || 'Invalid credentials'));
                     } else {
-                        // Response was not OK and was not JSON (i.e., it was HTML)
-                        alert("Login failed due to unexpected server response. Please ensure your credentials are correct.");
-                        console.error("Server returned non-JSON content. Response Status:", response.status);
+                        // Response was not JSON (i.e., HTML redirect or plain text error)
+                        alert("Login failed. Please verify your username and password, or check the server status.");
+                        console.error("Server returned non-JSON content. Status:", response.status);
                     }
                 }
             } catch(error) {
