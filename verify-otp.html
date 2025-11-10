@@ -29,7 +29,8 @@
         // Ensure the user has an active reset request identifier
         const identifier = localStorage.getItem('reset_identifier');
         if (!identifier) {
-            window.location.href = '/forgot-password';
+            // FIX: Use absolute path construction
+            window.location.href = window.location.origin + '/forgot-password';
         }
 
         document.getElementById('verify-otp-form').addEventListener('submit', async (e) => {
@@ -46,8 +47,8 @@
 
             if (response.ok) {
                 alert('Code verified! Proceeding to set new password.');
-                // Note: We keep the identifier in localStorage until the final reset.
-                window.location.href = '/reset-password';
+                // FIX: Use absolute path construction
+                window.location.href = window.location.origin + '/reset-password';
             } else {
                 alert('Verification failed: ' + (result.error || 'Invalid code.'));
             }
