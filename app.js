@@ -1,5 +1,3 @@
-// --- Application Tier using Express and PostgreSQL (pg) ---
-
 const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
@@ -169,7 +167,7 @@ app.get('/api/transactions', requireLogin, async (req, res) => {
     }
 });
 
-// Admin endpoint to view users (showing secure hash) <-- FIX: MISSING ROUTE DEFINITION
+// Admin endpoint to view users (showing secure hash)
 app.get('/api/admin/registered-users', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
@@ -190,6 +188,108 @@ app.get('/api/admin/registered-users', async (req, res) => {
     }
 });
 
+// API to initiate password reset (Generate and "Send" OTP)
+app.post('/api/forgot-password', async (req, res) => {
+    const { identifier } = req.body;
+
+    let userResult;
+    if (validator.isEmail(identifier)) {
+        userResult = await pool.query('SELECT id FROM users WHERE email = $1', [identifier]);
+    } else if (validator.isMobilePhone(identifier, 'any')) {
+        userResult = await pool.query('SELECT id FROM users WHERE mobile = $1', [identifier]);
+    } else {
+        return res.status(400).json({ error: 'Invalid identifier format.' });
+    }
+
+    if (userResult.rows.length === 0) {
+        // Return generic success to prevent fishing for valid accounts.
+        return res.json({ message: 'If user exists, code has been sent.' });
+    }
+
+    // 2. Generate and store the OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+    const expiresAt = new Date(Date.now() + 10 * 60000); // Expires in 10 minutes
+
+    try {
+        await pool.query(
+            `INSERT INTO password_resets (identifier, code, expires_at)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (identifier) DO UPDATE SET code = $2, expires_at = $3`,
+            [identifier, otpCode, expiresAt]
+        );
+        
+        // MOCK LOG: Code is printed to console for testing
+        console.log(`--- MOCK OTP FOR ${identifier}: ${otpCode} (Expires ${expiresAt.toLocaleTimeString()}) ---`);
+        
+        // Success: Tell the client to proceed to verification
+        res.json({ message: 'Verification code sent.', otpCode: otpCode });
+
+    } catch (err) {
+        console.error('OTP generation error:', err.stack);
+        res.status(500).json({ error: 'Failed to initiate password reset.' });
+    }
+});
+
+// API to verify the OTP and grant reset permission
+app.post('/api/verify-otp', async (req, res) => {
+    const { identifier, otpCode } = req.body;
+
+    try {
+        const result = await pool.query(
+            'SELECT code, expires_at FROM password_resets WHERE identifier = $1', 
+            [identifier]
+        );
+        const resetRequest = result.rows[0];
+
+        if (!resetRequest || resetRequest.code !== otpCode) {
+            return res.status(400).json({ error: 'Invalid verification code.' });
+        }
+
+        if (new Date(resetRequest.expires_at) < new Date()) {
+            return res.status(400).json({ error: 'Verification code has expired.' });
+        }
+
+        // OTP is valid: Grant permission to reset password via session flag
+        req.session.resetIdentifier = identifier; 
+
+        // Delete the code to prevent reuse
+        await pool.query('DELETE FROM password_resets WHERE identifier = $1', [identifier]);
+
+        res.json({ message: 'Code verified. Ready to reset password.' });
+
+    } catch (err) {
+        console.error('OTP verification error:', err.stack);
+        res.status(500).json({ error: 'Verification failed.' });
+    }
+});
+
+// API to finalize the password reset
+app.post('/api/reset-password', async (req, res) => {
+    const { password } = req.body;
+    const identifier = req.session.resetIdentifier;
+
+    if (!identifier) {
+        return res.status(401).json({ error: 'Reset session expired or invalid.' });
+    }
+    
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Determine if identifier is email or mobile to update the correct user
+        let field = validator.isEmail(identifier) ? 'email' : 'mobile';
+
+        await pool.query(`UPDATE users SET password = $1 WHERE ${field} = $2`, [hashedPassword, identifier]);
+
+        // Clear the session flag after successful reset
+        delete req.session.resetIdentifier;
+        
+        res.json({ message: 'Password successfully updated.' });
+    } catch (err) {
+        console.error('Password reset error:', err.stack);
+        res.status(500).json({ error: 'Failed to reset password.' });
+    }
+});
+
 
 // --- 5. HTML ROUTES ---
 
@@ -206,24 +306,29 @@ app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
+// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+// Serve forgot password page
 app.get('/forgot-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'forgot-password.html'));
 });
 
+// Serve OTP verification page
 app.get('/verify-otp', (req, res) => {
     res.sendFile(path.join(__dirname, 'verify-otp.html'));
 });
 
+// Serve final password reset page
 app.get('/reset-password', (req, res) => {
     if (!req.session.resetIdentifier) { 
         return res.redirect('/forgot-password');
     }
     res.sendFile(path.join(__dirname, 'reset-password.html'));
 });
+
 
 // --- 6. START THE SERVER ---
 async function startServer() {
