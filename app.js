@@ -75,7 +75,6 @@ app.use(session({
 // --- 3. AUTHENTICATION HELPERS ---
 function requireLogin(req, res, next) {
     if (!req.session.user) {
-        // Return 401 for API calls
         return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
@@ -102,7 +101,6 @@ app.post('/api/login', async (req, res) => {
             req.session.user = { id: user.id, username: user.username }; 
             res.json({ message: 'Login successful' });
         } else {
-            // Return JSON error on failed credentials (prevents HTML redirect crash)
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (err) {
@@ -171,7 +169,27 @@ app.get('/api/transactions', requireLogin, async (req, res) => {
     }
 });
 
-// --- (Other OTP/Admin API endpoints omitted for brevity, assume they are included and correct) ---
+// Admin endpoint to view users (showing secure hash) <-- FIX: MISSING ROUTE DEFINITION
+app.get('/api/admin/registered-users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
+        
+        const users = result.rows.map(user => ({
+            id: user.id,
+            username: user.username,
+            password_hash: user.password
+        }));
+
+        res.json({ 
+            total_users: result.rows.length,
+            users: users 
+        });
+    } catch (err) {
+        console.error('User fetch error:', err);
+        res.status(500).json({ error: 'Failed to fetch registered users.' });
+    }
+});
+
 
 // --- 5. HTML ROUTES ---
 
@@ -188,22 +206,18 @@ app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-// Serve register page
 app.get('/register', (req, res) => {
     res.sendFile(path.join(__dirname, 'register.html'));
 });
 
-// Serve forgot password page
 app.get('/forgot-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'forgot-password.html'));
 });
 
-// Serve OTP verification page
 app.get('/verify-otp', (req, res) => {
     res.sendFile(path.join(__dirname, 'verify-otp.html'));
 });
 
-// Serve final password reset page
 app.get('/reset-password', (req, res) => {
     if (!req.session.resetIdentifier) { 
         return res.redirect('/forgot-password');
