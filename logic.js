@@ -3,7 +3,6 @@
 // Check login status and update UI
 async function checkLoginStatus() {
     try {
-        // NOTE: This assumes an endpoint exists in app.js at /api/check-session
         const response = await fetch('/api/check-session');
         const result = await response.json();
 
@@ -44,7 +43,7 @@ async function fetchTransactions() {
         tableBody.innerHTML = '';
 
         const categorySymbols = {
-            food: '🍽️', salary: '💰', rent: '🏠', fun: '🎉', transfer: '↔️',
+            food: '🍽️', salary: '💰', rent: '🏠', rent: '🏠', fun: '🎉', transfer: '↔️',
         };
 
         transactions.forEach(tx => {
@@ -106,5 +105,4 @@ document.getElementById('transaction-form').addEventListener('submit', async (ev
 });
 
 // Initial function calls
-// NOTE: fetchTransactions is now called inside checkLoginStatus
 checkLoginStatus();
