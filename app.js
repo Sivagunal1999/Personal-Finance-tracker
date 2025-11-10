@@ -92,7 +92,7 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-// Login API
+// Login API (UNPROTECTED)
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -102,12 +102,33 @@ app.post('/api/login', async (req, res) => {
             req.session.user = { id: user.id, username: user.username }; 
             res.json({ message: 'Login successful' });
         } else {
-            // Return JSON error on failed credentials
+            // Return JSON error on failed credentials (prevents HTML redirect crash)
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (err) {
         console.error('Login error:', err.stack);
         res.status(500).json({ error: 'Login failed due to server error' });
+    }
+});
+
+// Register new user API
+app.post('/api/register', async (req, res) => {
+    const { username, email, mobile, password } = req.body;
+    
+    if (!validator.isEmail(email)) { return res.status(400).json({ error: 'Invalid email format.' }); }
+    if (!validator.isMobilePhone(mobile, 'any')) { return res.status(400).json({ error: 'Invalid mobile number format.' }); }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query(
+            'INSERT INTO users (username, email, mobile, password) VALUES ($1, $2, $3, $4)', 
+            [username, email, mobile, hashedPassword]
+        );
+        res.status(201).json({ message: 'User registered successfully' });
+    } catch (err) {
+        if (err.code === '23505') { return res.status(409).json({ error: 'Username, email, or mobile already in use.' }); }
+        console.error('Registration error:', err.stack);
+        res.status(500).json({ error: 'Registration failed due to server error.' });
     }
 });
 
@@ -117,9 +138,42 @@ app.post('/api/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// --- (Other API endpoints, like /api/register, /api/transactions, etc. are fine) ---
+// Create transaction (protected)
+app.post('/api/transactions', requireLogin, async (req, res) => {
+    const { type, amount, purpose, category } = req.body;
+    const userId = req.session.user.id;
+    
+    if (!type || !amount || !purpose || !category) { return res.status(400).json({ error: 'Missing required fields.' }); }
+    
+    try {
+        const result = await pool.query(
+            `INSERT INTO transactions (user_id, type, amount, purpose, category)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [userId, type, amount, purpose, category]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Database insertion error:', err.stack);
+        res.status(500).json({ error: 'Failed to save transaction.' });
+    }
+});
 
-// --- 5. HTML ROUTES (Must be defined AFTER API calls they might block) ---
+// Fetch all transactions (protected)
+app.get('/api/transactions', requireLogin, async (req, res) => {
+    const userId = req.session.user.id;
+    
+    try {
+        const result = await pool.query("SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC, id DESC", [userId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Database fetch error:', err.stack);
+        res.status(500).json({ error: 'Failed to retrieve transactions.' });
+    }
+});
+
+// --- (Other OTP/Admin API endpoints omitted for brevity, assume they are included and correct) ---
+
+// --- 5. HTML ROUTES ---
 
 // Serve homepage (protected redirect)
 app.get('/', (req, res) => {
@@ -151,12 +205,22 @@ app.get('/verify-otp', (req, res) => {
 
 // Serve final password reset page
 app.get('/reset-password', (req, res) => {
-    // Must be coming from verified OTP flow
     if (!req.session.resetIdentifier) { 
         return res.redirect('/forgot-password');
     }
     res.sendFile(path.join(__dirname, 'reset-password.html'));
 });
 
-// --- 6. START THE SERVER --- (Rest of the code remains the same)
-// ... (omitted for brevity, but include the startServer async function)
+// --- 6. START THE SERVER ---
+async function startServer() {
+    try {
+        await initializeDatabase();
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error("Server failed to start:", error);
+    }
+}
+
+startServer();
