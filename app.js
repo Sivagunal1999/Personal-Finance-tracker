@@ -1,12 +1,23 @@
+// --- Application Tier using Express and PostgreSQL (pg) ---
+
 const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const validator = require('validator');
+const twilio = require('twilio'); // NEW: Twilio library for SMS
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// --- TWILIO SETUP (Reads Environment Variables) ---
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER; // Your Twilio phone number
+
+const twilioClient = new twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
 
 // --- 1. DATA TIER (PostgreSQL Setup) ---
 const poolConfig = {
@@ -80,6 +91,68 @@ function requireLogin(req, res, next) {
 
 // --- 4. API ENDPOINTS ---
 
+// API to initiate password reset (Generate and send REAL SMS/Email OTP) <-- UPDATED LOGIC
+app.post('/api/forgot-password', async (req, res) => {
+    const { identifier } = req.body;
+
+    let userResult;
+    // CRITICAL: We assume mobile number input for SMS
+    if (validator.isMobilePhone(identifier, 'any')) { 
+        userResult = await pool.query('SELECT mobile FROM users WHERE mobile = $1', [identifier]);
+    } else {
+        // Fallback to email if it looks like an email, although SMS is primary request
+        userResult = await pool.query('SELECT email FROM users WHERE email = $1', [identifier]);
+    }
+
+    if (userResult.rows.length === 0) {
+        // Return generic success to prevent fishing
+        return res.json({ message: 'If user exists, code has been sent.' });
+    }
+    
+    // Determine the actual contact point
+    const contact = userResult.rows[0].mobile || userResult.rows[0].email;
+    const isMobile = !!userResult.rows[0].mobile;
+
+    // 2. Generate and store the OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+    const expiresAt = new Date(Date.now() + 10 * 60000); // Expires in 10 minutes
+
+    try {
+        await pool.query(
+            `INSERT INTO password_resets (identifier, code, expires_at)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (identifier) DO UPDATE SET code = $2, expires_at = $3`,
+            [identifier, otpCode, expiresAt]
+        );
+
+        // --- REAL TWILIO SMS SENDING LOGIC ---
+        if (isMobile) {
+            await twilioClient.messages.create({
+                body: `Your Finance Tracker password reset code is: ${otpCode}. It expires in 10 minutes.`,
+                to: contact, // User's mobile number
+                from: TWILIO_PHONE_NUMBER // Your Twilio number
+            });
+            console.log(`SMS sent successfully to ${contact}.`);
+        } else {
+            // Placeholder for Email sending logic (e.g., SendGrid)
+            console.log(`Email/SMS service not configured. Code generated for ${contact}: ${otpCode}`);
+        }
+        // --- END REAL LOGIC ---
+        
+        res.json({ message: 'Verification code sent.' });
+
+    } catch (err) {
+        console.error('OTP sending/generation error:', err.stack);
+        // Note: Returning a generic message to the client even on failure is secure
+        res.status(500).json({ error: 'Failed to initiate password reset service.' });
+    }
+});
+
+
+// --- (Other API endpoints remain the same) ---
+
+// --- 5. ROUTES and START SERVER (omitted for brevity) ---
+
 // Check Session
 app.get('/api/check-session', (req, res) => {
     if (req.session.user) {
@@ -88,6 +161,27 @@ app.get('/api/check-session', (req, res) => {
         res.json({ loggedIn: false });
     }
 });
+
+app.get('/api/admin/registered-users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
+        
+        const users = result.rows.map(user => ({
+            id: user.id,
+            username: user.username,
+            password_hash: user.password
+        }));
+
+        res.json({ 
+            total_users: result.rows.length,
+            users: users 
+        });
+    } catch (err) {
+        console.error('User fetch error:', err);
+        res.status(500).json({ error: 'Failed to fetch registered users.' });
+    }
+});
+
 
 // Login API (UNPROTECTED)
 app.post('/api/login', async (req, res) => {
@@ -164,69 +258,6 @@ app.get('/api/transactions', requireLogin, async (req, res) => {
     } catch (err) {
         console.error('Database fetch error:', err.stack);
         res.status(500).json({ error: 'Failed to retrieve transactions.' });
-    }
-});
-
-// Admin endpoint to view users (showing secure hash)
-app.get('/api/admin/registered-users', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, username, password FROM users ORDER BY id ASC');
-        
-        const users = result.rows.map(user => ({
-            id: user.id,
-            username: user.username,
-            password_hash: user.password
-        }));
-
-        res.json({ 
-            total_users: result.rows.length,
-            users: users 
-        });
-    } catch (err) {
-        console.error('User fetch error:', err);
-        res.status(500).json({ error: 'Failed to fetch registered users.' });
-    }
-});
-
-// API to initiate password reset (Generate and "Send" OTP)
-app.post('/api/forgot-password', async (req, res) => {
-    const { identifier } = req.body;
-
-    let userResult;
-    if (validator.isEmail(identifier)) {
-        userResult = await pool.query('SELECT id FROM users WHERE email = $1', [identifier]);
-    } else if (validator.isMobilePhone(identifier, 'any')) {
-        userResult = await pool.query('SELECT id FROM users WHERE mobile = $1', [identifier]);
-    } else {
-        return res.status(400).json({ error: 'Invalid identifier format.' });
-    }
-
-    if (userResult.rows.length === 0) {
-        // Return generic success to prevent fishing for valid accounts.
-        return res.json({ message: 'If user exists, code has been sent.' });
-    }
-
-    // 2. Generate and store the OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
-    const expiresAt = new Date(Date.now() + 10 * 60000); // Expires in 10 minutes
-
-    try {
-        await pool.query(
-            `INSERT INTO password_resets (identifier, code, expires_at)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (identifier) DO UPDATE SET code = $2, expires_at = $3`,
-            [identifier, otpCode, expiresAt]
-        );
-        
-        // MOCK LOG: Code is printed to console for testing
-        console.log(`--- MOCK OTP FOR ${identifier}: ${otpCode} (Expires ${expiresAt.toLocaleTimeString()}) ---`);
-        
-        // Success: Tell the client to proceed to verification
-        res.json({ message: 'Verification code sent.', otpCode: otpCode });
-
-    } catch (err) {
-        console.error('OTP generation error:', err.stack);
-        res.status(500).json({ error: 'Failed to initiate password reset.' });
     }
 });
 
