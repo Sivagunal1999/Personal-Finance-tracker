@@ -39,18 +39,29 @@
             const mobile = document.getElementById('mobile').value;
             const password = document.getElementById('password').value;
 
-            const response = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, email, mobile, password })
-            });
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, mobile, password })
+                });
 
-            const result = await response.json();
-            if (response.ok) {
-                alert('Registration successful! Please login.');
-                window.location.href = '/login';
-            } else {
-                alert('Registration failed: ' + (result.error || 'Username may be taken.'));
+                if (response.ok) {
+                    alert('Registration successful! Please login.');
+                    window.location.href = '/login';
+                } else {
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const result = await response.json();
+                        alert('Registration failed: ' + (result.error || 'Username/email may be taken.'));
+                    } else {
+                        alert("Registration failed due to server error.");
+                        console.error("Server returned non-JSON content. Status:", response.status);
+                    }
+                }
+            } catch(error) {
+                alert("Registration failed: Cannot connect to the server.");
+                console.error("Fetch error:", error);
             }
         });
     </script>
